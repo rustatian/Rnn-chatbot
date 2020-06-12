@@ -4,6 +4,7 @@ Model to predict the next sentence given an input sequence
 """
 
 import tensorflow as tf
+import tensorflow_addons as tfa
 from chatbot.textdata import Batch
 
 
@@ -11,6 +12,7 @@ class ProjectionOp:
     """ Single layer perceptron
     Project input tensor on the output dimension
     """
+
     def __init__(self, shape, scope=None, dtype=None):
         """
         Args:
@@ -23,18 +25,18 @@ class ProjectionOp:
         self.scope = scope
 
         # Projection on the keyboard
-        with tf.variable_scope('weights_' + self.scope):
-            self.W_t = tf.get_variable(
+        with tf.compat.v1.variable_scope('weights_' + self.scope):
+            self.W_t = tf.compat.v1.get_variable(
                 'weights',
                 shape,
                 # initializer=tf.truncated_normal_initializer()  # TODO: Tune value (fct of input size: 1/sqrt(input_dim))
                 dtype=dtype)
-            self.b = tf.get_variable(
+            self.b = tf.compat.v1.get_variable(
                 'bias',
                 shape[0],
-                initializer=tf.constant_initializer(),
+                initializer=tf.compat.v1.constant_initializer(),
                 dtype=dtype)
-            self.W = tf.transpose(self.W_t)
+            self.W = tf.transpose(a=self.W_t)
 
     def getWeights(self):
         """ Convenience method for some tf arguments
@@ -46,7 +48,7 @@ class ProjectionOp:
         Args:
             X (tf.Tensor): input value
         """
-        with tf.name_scope(self.scope):
+        with tf.compat.v1.name_scope(self.scope):
             return tf.matmul(X, self.W) + self.b
 
 
@@ -71,8 +73,8 @@ class Model:
         self.dtype = tf.float32
 
         # Placeholders
-        self.encoderInputs  = None
-        self.decoderInputs  = None  # Same that decoderTarget plus the <go>
+        self.encoderInputs = None
+        self.decoderInputs = None  # Same that decoderTarget plus the <go>
         self.decoderTargets = None
         self.decoderWeights = None  # Adjust the learning to the target sentence size
 
@@ -106,9 +108,9 @@ class Model:
 
                 # We need to compute the sampled_softmax_loss using 32bit floats to
                 # avoid numerical instabilities.
-                localWt     = tf.cast(outputProjection.W_t,             tf.float32)
-                localB      = tf.cast(outputProjection.b,               tf.float32)
-                localInputs = tf.cast(inputs,                           tf.float32)
+                localWt = tf.cast(outputProjection.W_t, tf.float32)
+                localB = tf.cast(outputProjection.b, tf.float32)
+                localInputs = tf.cast(inputs, tf.float32)
 
                 return tf.cast(
                     tf.nn.sampled_softmax_loss(
@@ -122,33 +124,39 @@ class Model:
 
         # Creation of the rnn cell
         def create_rnn_cell():
-            encoDecoCell = tf.contrib.rnn.BasicLSTMCell(  # Or GRUCell, LSTMCell(args.hiddenSize)
+            encoDecoCell = tf.compat.v1.nn.rnn_cell.BasicLSTMCell(  # Or GRUCell, LSTMCell(args.hiddenSize)
                 self.args.hiddenSize,
             )
             if not self.args.test:  # TODO: Should use a placeholder instead
-                encoDecoCell = tf.contrib.rnn.DropoutWrapper(
+                encoDecoCell = tf.compat.v1.nn.rnn_cell.DropoutWrapper(
                     encoDecoCell,
                     input_keep_prob=1.0,
                     output_keep_prob=self.args.dropout
                 )
             return encoDecoCell
-        encoDecoCell = tf.contrib.rnn.MultiRNNCell(
+
+        encoDecoCell = tf.compat.v1.nn.rnn_cell.MultiRNNCell(
             [create_rnn_cell() for _ in range(self.args.numLayers)],
         )
 
         # Network input (placeholders)
 
-        with tf.name_scope('placeholder_encoder'):
-            self.encoderInputs  = [tf.placeholder(tf.int32,   [None, ]) for _ in range(self.args.maxLengthEnco)]  # Batch size * sequence length * input dim
+        with tf.compat.v1.name_scope('placeholder_encoder'):
+            self.encoderInputs = [tf.compat.v1.placeholder(tf.int32, [None, ]) for _ in
+                                  range(self.args.maxLengthEnco)]  # Batch size * sequence length * input dim
 
-        with tf.name_scope('placeholder_decoder'):
-            self.decoderInputs  = [tf.placeholder(tf.int32,   [None, ], name='inputs') for _ in range(self.args.maxLengthDeco)]  # Same sentence length for input and output (Right ?)
-            self.decoderTargets = [tf.placeholder(tf.int32,   [None, ], name='targets') for _ in range(self.args.maxLengthDeco)]
-            self.decoderWeights = [tf.placeholder(tf.float32, [None, ], name='weights') for _ in range(self.args.maxLengthDeco)]
+        with tf.compat.v1.name_scope('placeholder_decoder'):
+            self.decoderInputs = [tf.compat.v1.placeholder(tf.int32, [None, ], name='inputs') for _ in
+                                  range(self.args.maxLengthDeco)]  # Same sentence length for input and output (Right ?)
+            self.decoderTargets = [tf.compat.v1.placeholder(tf.int32, [None, ], name='targets') for _ in
+                                   range(self.args.maxLengthDeco)]
+            self.decoderWeights = [tf.compat.v1.placeholder(tf.float32, [None, ], name='weights') for _ in
+                                   range(self.args.maxLengthDeco)]
 
         # Define the network
         # Here we use an embedding model, it takes integer as input and convert them into word vector for
         # better word representation
+
         decoderOutputs, states = tf.contrib.legacy_seq2seq.embedding_rnn_seq2seq(
             self.encoderInputs,  # List<[batch=?, inputDim=1]>, list of size args.maxLength
             self.decoderInputs,  # For training, we force the correct output (feed_previous=False)
@@ -157,7 +165,8 @@ class Model:
             self.textData.getVocabularySize(),  # Both encoder and decoder have the same number of class
             embedding_size=self.args.embeddingSize,  # Dimension of each word
             output_projection=outputProjection.getWeights() if outputProjection else None,
-            feed_previous=bool(self.args.test)  # When we test (self.args.test), we use previous output as next input (feed_previous)
+            feed_previous=bool(self.args.test)
+            # When we test (self.args.test), we use previous output as next input (feed_previous)
         )
 
         # TODO: When the LSTM hidden size is too big, we should project the LSTM output into a smaller space (4086 => 2046): Should speed up
@@ -180,12 +189,12 @@ class Model:
                 self.decoderTargets,
                 self.decoderWeights,
                 self.textData.getVocabularySize(),
-                softmax_loss_function= sampledSoftmax if outputProjection else None  # If None, use default SoftMax
+                softmax_loss_function=sampledSoftmax if outputProjection else None  # If None, use default SoftMax
             )
-            tf.summary.scalar('loss', self.lossFct)  # Keep track of the cost
+            tf.compat.v1.summary.scalar('loss', self.lossFct)  # Keep track of the cost
 
             # Initialize the optimizer
-            opt = tf.train.AdamOptimizer(
+            opt = tf.compat.v1.train.AdamOptimizer(
                 learning_rate=self.args.learningRate,
                 beta1=0.9,
                 beta2=0.999,
@@ -208,17 +217,17 @@ class Model:
 
         if not self.args.test:  # Training
             for i in range(self.args.maxLengthEnco):
-                feedDict[self.encoderInputs[i]]  = batch.encoderSeqs[i]
+                feedDict[self.encoderInputs[i]] = batch.encoderSeqs[i]
             for i in range(self.args.maxLengthDeco):
-                feedDict[self.decoderInputs[i]]  = batch.decoderSeqs[i]
+                feedDict[self.decoderInputs[i]] = batch.decoderSeqs[i]
                 feedDict[self.decoderTargets[i]] = batch.targetSeqs[i]
                 feedDict[self.decoderWeights[i]] = batch.weights[i]
 
             ops = (self.optOp, self.lossFct)
         else:  # Testing (batchSize == 1)
             for i in range(self.args.maxLengthEnco):
-                feedDict[self.encoderInputs[i]]  = batch.encoderSeqs[i]
-            feedDict[self.decoderInputs[0]]  = [self.textData.goToken]
+                feedDict[self.encoderInputs[i]] = batch.encoderSeqs[i]
+            feedDict[self.decoderInputs[0]] = [self.textData.goToken]
 
             ops = (self.outputs,)
 

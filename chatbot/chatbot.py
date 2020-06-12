@@ -165,10 +165,11 @@ class Chatbot:
         return parser.parse_args(args)
 
     def main(self, args=None):
+        tf.compat.v1.disable_eager_execution()
         """
         Launch the training and/or the interactive mode
         """
-        print('Welcome ADEXIN AI v0.1 !')
+        print('Welcome To the SIMPLE CHATBOT')
         print()
         print('TensorFlow detected: v{}'.format(tf.__version__))
 
@@ -198,8 +199,8 @@ class Chatbot:
             self.model = Model(self.args, self.textData)
 
         # Saver/summaries
-        self.writer = tf.summary.FileWriter(self._getSummaryName())
-        self.saver = tf.train.Saver(max_to_keep=200)
+        self.writer = tf.compat.v1.summary.FileWriter(self._getSummaryName())
+        self.saver = tf.compat.v1.train.Saver(max_to_keep=200)
 
         # TODO: Fixed seed (WARNING: If dataset shuffling, make sure to do that after saving the
         # dataset, otherwise, all which cames after the shuffling won't be replicable when
@@ -207,7 +208,7 @@ class Chatbot:
         # Also fix seed for random.shuffle (does it works globally for all files ?)
 
         # Running session
-        self.sess = tf.Session(config=tf.ConfigProto(
+        self.sess = tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(
             allow_soft_placement=True,  # Allows backup device for non GPU-available operations (when forcing GPU)
             log_device_placement=False)  # Too verbose ?
         )  # TODO: Replace all sess by self.sess (not necessary a good idea) ?
@@ -217,7 +218,7 @@ class Chatbot:
             self.sess.add_tensor_filter("has_inf_or_nan", tf_debug.has_inf_or_nan)
 
         print('Initialize variables...')
-        self.sess.run(tf.global_variables_initializer())
+        self.sess.run(tf.compat.v1.global_variables_initializer())
 
         # Reload the model eventually (if it exist.), on testing mode, the models are not loaded here (but in predictTestset)
         if self.args.test != Chatbot.TestMode.ALL:
@@ -255,7 +256,7 @@ class Chatbot:
 
         self.textData.makeLighter(self.args.ratioDataset)  # Limit the number of training samples
 
-        mergedSummaries = tf.summary.merge_all()  # Define the summary operator (Warning: Won't appear on the tensorboard graph)
+        mergedSummaries = tf.compat.v1.summary.merge_all()  # Define the summary operator (Warning: Won't appear on the tensorboard graph)
         if self.globStep == 0:  # Not restoring from previous run
             self.writer.add_graph(sess.graph)  # First time only
 
@@ -419,13 +420,13 @@ class Chatbot:
         """
 
         # Fetch embedding variables from model
-        with tf.variable_scope("embedding_rnn_seq2seq/rnn/embedding_wrapper", reuse=True):
-            em_in = tf.get_variable("embedding")
-        with tf.variable_scope("embedding_rnn_seq2seq/embedding_rnn_decoder", reuse=True):
-            em_out = tf.get_variable("embedding")
+        with tf.compat.v1.variable_scope("embedding_rnn_seq2seq/rnn/embedding_wrapper", reuse=True):
+            em_in = tf.compat.v1.get_variable("embedding")
+        with tf.compat.v1.variable_scope("embedding_rnn_seq2seq/embedding_rnn_decoder", reuse=True):
+            em_out = tf.compat.v1.get_variable("embedding")
 
         # Disable training for embeddings
-        variables = tf.get_collection_ref(tf.GraphKeys.TRAINABLE_VARIABLES)
+        variables = tf.compat.v1.get_collection_ref(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
         variables.remove(em_in)
         variables.remove(em_out)
 
