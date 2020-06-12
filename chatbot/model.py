@@ -124,7 +124,7 @@ class Model:
 
         # Creation of the rnn cell
         def create_rnn_cell():
-            encoDecoCell = tf.compat.v1.nn.rnn_cell.BasicLSTMCell(  # Or GRUCell, LSTMCell(args.hiddenSize)
+            encoDecoCell = tf.keras.layers.LSTMCell(  # Or GRUCell, LSTMCell(args.hiddenSize)
                 self.args.hiddenSize,
             )
             if not self.args.test:  # TODO: Should use a placeholder instead
@@ -135,7 +135,7 @@ class Model:
                 )
             return encoDecoCell
 
-        encoDecoCell = tf.compat.v1.nn.rnn_cell.MultiRNNCell(
+        encoDecoCell = tf.keras.layers.StackedRNNCells(
             [create_rnn_cell() for _ in range(self.args.numLayers)],
         )
 
